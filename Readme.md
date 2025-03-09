@@ -5,17 +5,17 @@
 #### NOTE: This still is an experiment don't think i will be able to complete it
 
 ### What am i making
-- so it's basically an http server
-- written in rust
-- inspired by express
-- first throwaway version will be built on top of actix web and then will see
+- So it's basically an http server
+- Written in rust
+- Inspired by express
+- First throwaway version will be built on top of actix web and then will see
 
 ### What are my goals for the project
 - I want the end user experience to be simple and intuitive like in express
 - I don't care much about performance in the starting as no matter how shitty my code will be it will be faster than actual express in typescript so, yeah
 
 ### What will the throwaway version have
-- only focused on routing different types of requests no middleware support
+- Only focused on routing different types of requests no middleware support
 
 ### Public Api ([main.rs](./src/main.rs))
 ```rust
