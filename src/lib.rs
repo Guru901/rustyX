@@ -58,18 +58,24 @@ impl App {
     }
 }
 
-pub struct HttpResponse;
+pub struct HttpResponse {
+    pub status_code: i32,
+    pub body: String,
+}
 
 impl HttpResponse {
-    pub fn status(self, code: i32) -> Self {
+    pub fn status(mut self, code: i32) -> Self {
+        self.status_code = code;
         return self;
     }
 
-    pub fn json(self, json: serde_json::Value) -> Self {
+    pub fn json(mut self, json: serde_json::Value) -> Self {
+        self.body = json.to_string();
         return self;
     }
 
-    pub fn text(self, text: String) -> Self {
+    pub fn text(mut self, text: String) -> Self {
+        self.body = text;
         return self;
     }
 }
