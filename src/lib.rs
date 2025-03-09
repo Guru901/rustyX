@@ -1,5 +1,4 @@
 use actix_web::Responder;
-#[allow(unused)]
 use std::{collections::HashMap, future::Future, sync::Arc};
 
 pub type Handler = Arc<dyn Fn(HttpRequest, HttpResponse) -> Fut + Send + Sync + 'static>;
@@ -43,76 +42,9 @@ impl App {
     pub async fn listen(self, addr: &str) {
         println!("Server listening on {}", addr);
 
-        let routes = self.routes;
+        let _routes = self.routes;
         actix_web::HttpServer::new(move || {
-            let mut app = actix_web::App::new();
-
-            for route in &routes {
-                for (method, paths) in route {
-                    for (path, handler) in paths {
-                        let handler_clone = handler.clone();
-                        let path_clone = path.to_string();
-
-                        let route = match method {
-                            HttpMethods::GET => actix_web::web::resource(path_clone).route(
-                                actix_web::web::get().to(move |req| {
-                                    let handler = handler_clone.clone();
-                                    async move {
-                                        let req = HttpRequest {};
-                                        let res = HttpResponse {
-                                            status_code: 200,
-                                            body: String::new(),
-                                        };
-                                        (handler)(req, res).await
-                                    }
-                                }),
-                            ),
-                            HttpMethods::POST => actix_web::web::resource(path_clone).route(
-                                actix_web::web::post().to(move |req| {
-                                    let handler = handler_clone.clone();
-                                    async move {
-                                        let req = HttpRequest {};
-                                        let res = HttpResponse {
-                                            status_code: 200,
-                                            body: String::new(),
-                                        };
-                                        (handler)(req, res).await
-                                    }
-                                }),
-                            ),
-                            HttpMethods::PUT => actix_web::web::resource(path_clone).route(
-                                actix_web::web::put().to(move |req| {
-                                    let handler = handler_clone.clone();
-                                    async move {
-                                        let req = HttpRequest {};
-                                        let res = HttpResponse {
-                                            status_code: 200,
-                                            body: String::new(),
-                                        };
-                                        (handler)(req, res).await
-                                    }
-                                }),
-                            ),
-                            HttpMethods::DELETE => actix_web::web::resource(path_clone).route(
-                                actix_web::web::delete().to(move |req| {
-                                    let handler = handler_clone.clone();
-                                    async move {
-                                        let req = HttpRequest {};
-                                        let res = HttpResponse {
-                                            status_code: 200,
-                                            body: String::new(),
-                                        };
-                                        (handler)(req, res).await
-                                    }
-                                }),
-                            ),
-                        };
-
-                        app = app.service(route);
-                    }
-                }
-            }
-
+            let app = actix_web::App::new();
             app
         })
         .bind(addr)
