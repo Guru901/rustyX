@@ -9,7 +9,7 @@ async fn main() {
     app.get("/user/:id", find_user);
     app.get("/search", search);
 
-    app.listen("127.0.0.1:3000");
+    app.listen("127.0.0.1:3000").await;
 }
 
 async fn index(_req: HttpRequest, res: HttpResponse) -> HttpResponse {

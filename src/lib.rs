@@ -49,7 +49,15 @@ impl App {
     {
     }
 
-    pub fn listen(&self, addr: &str) {}
+    pub async fn listen(&self, addr: &str) {
+        println!("Server listening on {}", addr);
+        actix_web::HttpServer::new(|| actix_web::App::new())
+            .bind(addr)
+            .unwrap()
+            .run()
+            .await
+            .unwrap()
+    }
 }
 
 pub struct HttpResponse;
