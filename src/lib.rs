@@ -4,7 +4,7 @@ use std::{collections::HashMap, future::Future, sync::Arc};
 pub type Handler = Arc<dyn Fn(HttpRequest, HttpResponse) -> Fut + Send + Sync + 'static>;
 pub type Fut = Box<dyn Future<Output = HttpResponse> + Send + 'static>;
 
-type Route = HashMap<HttpMethods, HashMap<&'static str, Handler>>;
+type Routes = HashMap<&'static str, HashMap<HttpMethods, Handler>>;
 
 #[derive(Eq, Hash, PartialEq)]
 enum HttpMethods {
@@ -15,12 +15,14 @@ enum HttpMethods {
 }
 
 pub struct App {
-    routes: Vec<Route>,
+    routes: Routes,
 }
 
 impl App {
     pub fn new() -> App {
-        return App { routes: Vec::new() };
+        return App {
+            routes: HashMap::new(),
+        };
     }
 
     pub fn get(&mut self, path: &'static str, handler: Handler) {
@@ -42,7 +44,6 @@ impl App {
     pub async fn listen(self, addr: &str) {
         println!("Server listening on {}", addr);
 
-        let _routes = self.routes;
         actix_web::HttpServer::new(move || {
             let app = actix_web::App::new();
             app
@@ -55,13 +56,9 @@ impl App {
     }
 
     fn add_route(&mut self, method: HttpMethods, path: &'static str, handler: Handler) {
-        let mut route = HashMap::new();
         let mut path_handlers = HashMap::new();
-
-        path_handlers.insert(path, handler);
-        route.insert(method, path_handlers);
-
-        self.routes.push(route);
+        path_handlers.insert(method, handler);
+        self.routes.insert(path, path_handlers);
     }
 }
 
