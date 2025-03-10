@@ -1,12 +1,23 @@
 use actix_web::Responder;
-use std::{collections::HashMap, future::Future, sync::Arc};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
+// Updated type definitions to support both boxed and impl Future
+pub type Fut = Pin<Box<dyn Future<Output = HttpResponse> + Send + 'static>>;
+
+// Function to convert an impl Future into our Fut type
+fn box_future<F>(future: F) -> Fut
+where
+    F: Future<Output = HttpResponse> + Send + 'static,
+{
+    Box::pin(future)
+}
+
+// Handler type that can work with async functions directly
 pub type Handler = Arc<dyn Fn(HttpRequest, HttpResponse) -> Fut + Send + Sync + 'static>;
-pub type Fut = Box<dyn Future<Output = HttpResponse> + Send + 'static>;
 
 type Routes = HashMap<&'static str, HashMap<HttpMethods, Handler>>;
 
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Eq, Hash, PartialEq, Clone)]
 enum HttpMethods {
     GET,
     PUT,
@@ -18,6 +29,14 @@ pub struct App {
     routes: Routes,
 }
 
+impl Clone for App {
+    fn clone(&self) -> Self {
+        App {
+            routes: self.routes.clone(),
+        }
+    }
+}
+
 impl App {
     pub fn new() -> App {
         return App {
@@ -25,27 +44,138 @@ impl App {
         };
     }
 
-    pub fn get(&mut self, path: &'static str, handler: Handler) {
-        self.add_route(HttpMethods::GET, path, handler);
+    // Updated get method to accept an async function directly
+    pub fn get<F, Fut>(&mut self, path: &'static str, handler: F)
+    where
+        F: Fn(HttpRequest, HttpResponse) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = HttpResponse> + Send + 'static,
+    {
+        let wrapped_handler = Arc::new(move |req, res| box_future(handler(req, res)));
+        self.add_route(HttpMethods::GET, path, wrapped_handler);
     }
 
-    pub fn post(&mut self, path: &'static str, handler: Handler) {
-        self.add_route(HttpMethods::POST, path, handler);
+    // Similarly update the other methods
+    pub fn post<F, Fut>(&mut self, path: &'static str, handler: F)
+    where
+        F: Fn(HttpRequest, HttpResponse) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = HttpResponse> + Send + 'static,
+    {
+        let wrapped_handler = Arc::new(move |req, res| box_future(handler(req, res)));
+        self.add_route(HttpMethods::POST, path, wrapped_handler);
     }
 
-    pub fn put(&mut self, path: &'static str, handler: Handler) {
-        self.add_route(HttpMethods::PUT, path, handler);
+    pub fn put<F, Fut>(&mut self, path: &'static str, handler: F)
+    where
+        F: Fn(HttpRequest, HttpResponse) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = HttpResponse> + Send + 'static,
+    {
+        let wrapped_handler = Arc::new(move |req, res| box_future(handler(req, res)));
+        self.add_route(HttpMethods::PUT, path, wrapped_handler);
     }
 
-    pub fn delete(&mut self, path: &'static str, handler: Handler) {
-        self.add_route(HttpMethods::DELETE, path, handler);
+    pub fn delete<F, Fut>(&mut self, path: &'static str, handler: F)
+    where
+        F: Fn(HttpRequest, HttpResponse) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = HttpResponse> + Send + 'static,
+    {
+        let wrapped_handler = Arc::new(move |req, res| box_future(handler(req, res)));
+        self.add_route(HttpMethods::DELETE, path, wrapped_handler);
     }
 
     pub async fn listen(self, addr: &str) {
         println!("Server listening on {}", addr);
 
+        // Clone routes for use in the closure
+        let routes = self.routes.clone();
+
         actix_web::HttpServer::new(move || {
-            let app = actix_web::App::new();
+            let mut app = actix_web::App::new();
+
+            // Process all routes
+            for (path, methods) in &routes {
+                for (method, handler) in methods {
+                    // Create a closure that will adapt our handler to actix_web
+                    let handler_clone = handler.clone();
+
+                    // Convert path format if needed (e.g., "/user/:id" to "/user/{id}")
+                    let actix_path = path.replace(":", "");
+
+                    // Map our HTTP methods to actix_web methods
+                    match method {
+                        HttpMethods::GET => {
+                            app = app.route(
+                                &actix_path,
+                                actix_web::web::get().to(move |req: actix_web::HttpRequest| {
+                                    // Convert actix request to our custom request
+                                    let our_req = HttpRequest::from_actix_request(&req);
+                                    let our_res = HttpResponse::new();
+
+                                    // Execute our handler
+                                    let future = handler_clone(our_req, our_res);
+
+                                    // Return a future that converts our response to actix response
+                                    async move {
+                                        let response = future.await;
+                                        response.to_responder()
+                                    }
+                                }),
+                            );
+                        }
+                        HttpMethods::POST => {
+                            app = app.route(
+                                &actix_path,
+                                actix_web::web::post().to(
+                                    // Similar implementation as GET
+                                    move |req: actix_web::HttpRequest| {
+                                        let our_req = HttpRequest::from_actix_request(&req);
+                                        let our_res = HttpResponse::new();
+                                        let future = handler_clone(our_req, our_res);
+                                        async move {
+                                            let response = future.await;
+                                            response.to_responder()
+                                        }
+                                    },
+                                ),
+                            );
+                        }
+                        HttpMethods::PUT => {
+                            app = app.route(
+                                &actix_path,
+                                actix_web::web::put().to(
+                                    // Similar implementation
+                                    move |req: actix_web::HttpRequest| {
+                                        let our_req = HttpRequest::from_actix_request(&req);
+                                        let our_res = HttpResponse::new();
+                                        let future = handler_clone(our_req, our_res);
+                                        async move {
+                                            let response = future.await;
+                                            response.to_responder()
+                                        }
+                                    },
+                                ),
+                            );
+                        }
+                        HttpMethods::DELETE => {
+                            app = app.route(
+                                &actix_path,
+                                actix_web::web::delete().to(
+                                    // Similar implementation
+                                    move |req: actix_web::HttpRequest| {
+                                        let our_req = HttpRequest::from_actix_request(&req);
+                                        let our_res = HttpResponse::new();
+                                        let future = handler_clone(our_req, our_res);
+                                        async move {
+                                            let response = future.await;
+                                            response.to_responder()
+                                        }
+                                    },
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+
             app
         })
         .bind(addr)
@@ -56,18 +186,25 @@ impl App {
     }
 
     fn add_route(&mut self, method: HttpMethods, path: &'static str, handler: Handler) {
-        let mut path_handlers = HashMap::new();
+        let path_handlers = self.routes.entry(path).or_insert_with(HashMap::new);
         path_handlers.insert(method, handler);
-        self.routes.insert(path, path_handlers);
     }
 }
 
+// Rest of the code remains the same...
 pub struct HttpResponse {
     pub status_code: i32,
     pub body: String,
 }
 
 impl HttpResponse {
+    pub fn new() -> Self {
+        HttpResponse {
+            status_code: 200,
+            body: String::new(),
+        }
+    }
+
     pub fn status(mut self, code: i32) -> Self {
         self.status_code = code;
         return self;
@@ -85,17 +222,18 @@ impl HttpResponse {
 
     fn to_responder(self) -> actix_web::HttpResponse {
         let body = self.body;
-        actix_web::HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(self.status_code as u16).unwrap(),
-        )
-        .body(body)
+        actix_web::http::StatusCode::from_u16(self.status_code as u16)
+            .map(|status| actix_web::HttpResponse::build(status).body(body))
+            .unwrap_or_else(|_| {
+                actix_web::HttpResponse::InternalServerError().body("Invalid status code")
+            })
     }
 }
 
 impl Responder for HttpResponse {
     type Body = actix_web::body::BoxBody;
 
-    fn respond_to(self, _req: &actix_web::HttpRequest) -> actix_web::HttpResponse {
+    fn respond_to(self, req: &actix_web::HttpRequest) -> actix_web::HttpResponse {
         self.to_responder()
     }
 }
@@ -110,4 +248,12 @@ impl HttpRequest {
     pub fn get_query(&self, query_name: &str) -> Option<String> {
         return Some(String::new());
     }
+
+    fn from_actix_request(req: &actix_web::HttpRequest) -> Self {
+        HttpRequest {}
+    }
+}
+
+async fn index() -> impl actix_web::Responder {
+    format!("Hello world!")
 }
