@@ -210,7 +210,11 @@ impl Responder for HttpResponse {
     }
 }
 
-pub struct HttpRequest;
+#[derive(Debug)]
+pub struct HttpRequest {
+    params: HashMap<String, String>,
+    queries: HashMap<String, String>,
+}
 
 impl HttpRequest {
     pub fn get_params(&self, param_name: &str) -> Option<String> {
@@ -222,7 +226,14 @@ impl HttpRequest {
     }
 
     fn from_actix_request(req: &actix_web::HttpRequest) -> Self {
-        HttpRequest {}
+        HttpRequest {
+            params: req
+                .match_info()
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            queries: HashMap::new(),
+        }
     }
 }
 
